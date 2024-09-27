@@ -24,7 +24,7 @@ iniconfig==2.0.0
 itsdangerous==2.2.0
 jiter==0.5.0
 jsonpointer==2.1
-litellm==1.40.17
+litellm==1.44.8
 markdown-it-py==3.0.0
 matplotlib==3.9.2
 mdurl==0.1.2
