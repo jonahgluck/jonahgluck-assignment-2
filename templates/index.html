@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMeans Clustering Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #plot {
+            width: 600px;
+            height: 400px;
+            margin-bottom: 20px;
+            border: 1px solid black;
+            position: relative;
+        }
+        .feedback {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <h1>KMeans Clustering Visualization</h1>
+    <div>
+        <button onclick="generateData()">Generate Random Data</button>
+        <select id="init-method" onchange="clearCentroids()">
+            <option value="random">Random</option>
+            <option value="farthest">Farthest First</option>
+            <option value="kmeans++">KMeans++</option>
+            <option value="manual">Manual</option>
+        </select>
+        <input type="number" id="num-clusters" value="3" min="1" onchange="clearCentroids()">
+        <button onclick="initializeKMeans()">Initialize KMeans</button>
+        <button onclick="stepKMeans()">Step Forward</button>
+        <button onclick="runKMeansFinal()">Run to Convergence</button>
+        <button onclick="resetKMeans()">Reset</button>
+    </div>
+    <div class="feedback" id="feedback"></div>
+    <div id="plot"></div>
+
+    <script>
+        let dataPoints = [];
+        let centroids = [];
+        let clusters = [];
+        
+        function generateData() {
+            fetch('/generate_data', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                dataPoints = data;
+                plotData(dataPoints, clusters, centroids);
+            });
+        }
+
+        function clearCentroids() {
+            centroids = [];
+            plotData(dataPoints, clusters, centroids);
+        }
+
+        function initializeKMeans() {
+            const initMethod = document.getElementById('init-method').value;
+            const k = parseInt(document.getElementById('num-clusters').value);
+
+            if (initMethod !== 'manual') {
+                centroids = [];
+            }
+
+            fetch('/initialize_kmeans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: dataPoints, k: k, initialization: initMethod, initial_centroids: centroids })
+            })
+            .then(response => response.json())
+            .then(result => {
+                centroids = result.centroids;
+                clusters = result.clusters;
+                plotData(dataPoints, clusters, centroids);
+            });
+        }
+
+        function stepKMeans() {
+            fetch('/step_kmeans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
+            .then(response => response.json())
+            .then(result => {
+                centroids = result.centroids;
+                clusters = result.clusters;
+                plotData(dataPoints, clusters, centroids);
+            });
+        }
+
+        function runKMeansFinal() {
+            const k = parseInt(document.getElementById('num-clusters').value);
+            fetch('/run_kmeans_final', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: dataPoints, k: k, initial_centroids: centroids })
+            })
+            .then(response => response.json())
+            .then(result => {
+                centroids = result.centroids;
+                clusters = result.clusters;
+                plotData(dataPoints, clusters, centroids);
+            });
+        }
+
+        function resetKMeans() {
+            dataPoints = [];
+            centroids = [];
+            clusters = [];
+            plotData(dataPoints, clusters, centroids);
+            document.getElementById('feedback').innerText = '';
+        }
+
+        function plotData(data, clusters, centroids) {
+            const svg = d3.select("#plot").select("svg");
+            if (!svg.empty()) {
+                svg.remove();
+            }
+
+            const width = 600;
+            const height = 400;
+            const xExtent = d3.extent(data, d => d[0]);
+            const yExtent = d3.extent(data, d => d[1]);
+
+            const xScale = d3.scaleLinear()
+                .domain([xExtent[0], xExtent[1]])
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([yExtent[0], yExtent[1]])
+                .range([height, 0]);
+
+            const svgContainer = d3.select("#plot")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .on("click", function(event) {
+                    const coords = d3.pointer(event);
+                    const x = xScale.invert(coords[0]);
+                    const y = yScale.invert(coords[1]);
+                    const k = parseInt(document.getElementById('num-clusters').value);
+                    if (centroids.length < k) {
+                        centroids.push([x, y]);
+                        plotData(dataPoints, clusters, centroids);
+                    } else {
+                        document.getElementById('feedback').innerText = 'Maximum number of centroids reached.';
+                    }
+                });
+
+            svgContainer.selectAll("circle")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("cx", d => xScale(d[0]))
+                .attr("cy", d => yScale(d[1]))
+                .attr("r", 5)
+                .style("fill", "black");
+
+            svgContainer.selectAll("rect")
+                .data(centroids)
+                .enter()
+                .append("rect")
+                .attr("x", d => xScale(d[0]) - 5)
+                .attr("y", d => yScale(d[1]) - 5)
+                .attr("width", 10)
+                .attr("height", 10)
+                .style("fill", "red");
+
+            clusters.forEach((cluster, index) => {
+                svgContainer.selectAll(`circle.cluster-${index}`)
+                    .data(cluster)
+                    .enter()
+                    .append("circle")
+                    .attr("class", `cluster-${index}`)
+                    .attr("cx", d => xScale(d[0]))
+                    .attr("cy", d => yScale(d[1]))
+                    .attr("r", 5)
+                    .style("fill", d3.schemeCategory10[index % 10]);
+            });
+        }
+    </script>
+</body>
+</html>
+
